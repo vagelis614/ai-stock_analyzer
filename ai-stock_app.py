@@ -5,9 +5,9 @@ import numpy as np
 import ta
 import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="AI Stock Analyzer", layout="wide")
-
+st.set_page_config(page_title="📈 AI Stock Analyzer", layout="wide")
 st.title("📈 AI Stock Analyzer")
+
 symbol = st.text_input("📊 Enter Stock Ticker", "AAPL").upper()
 
 if not symbol:
@@ -17,49 +17,49 @@ if not symbol:
 # Download stock data
 data = yf.download(symbol, period="6mo", interval="1d")
 
-if data.empty or data['Close'].isnull().all():
+# 🔧 Ελέγχει αν υπάρχει έγκυρο ιστορικό για τον ticker
+if data is None or data.empty or data['Close'].dropna().empty:
     st.error("No valid data found for the given symbol.")
     st.stop()
 
-# Make sure Close is a Series (1D)
-close = data['Close']
-if isinstance(close, pd.DataFrame):
-    close = close.squeeze()  # turns (n,1) -> (n,)
-elif isinstance(close.values[0], (np.ndarray, list)):
-    close = close.apply(lambda x: x[0])
-
-# Calculate indicators
-data['RSI'] = ta.momentum.RSIIndicator(close).rsi()
-macd = ta.trend.MACD(close)
+# --- Indicators ---
+data['RSI'] = ta.momentum.RSIIndicator(close=data['Close'].squeeze()).rsi()
+macd = ta.trend.MACD(close=data['Close'].squeeze())
 data['MACD'] = macd.macd()
 data['MACD_signal'] = macd.macd_signal()
-data['ADX'] = ta.trend.ADXIndicator(data['High'], data['Low'], close).adx()
-data['Volume_SMA'] = data['Volume'].rolling(window=14).mean()
+data['ADX'] = ta.trend.ADXIndicator(high=data['High'], low=data['Low'], close=data['Close'].squeeze()).adx()
+data['Volume_avg'] = data['Volume'].rolling(window=14).mean()
 
-# Buy/Sell Signals (simple logic)
+# --- Signals ---
 data['Buy'] = (data['RSI'] < 30) & (data['MACD'] > data['MACD_signal']) & (data['ADX'] > 20)
 data['Sell'] = (data['RSI'] > 70) & (data['MACD'] < data['MACD_signal']) & (data['ADX'] > 20)
 
-# Plotting
-st.subheader(f"📉 Price & Indicators for {symbol}")
-fig, ax = plt.subplots(figsize=(12, 6))
-ax.plot(data.index, data['Close'], label='Close Price')
+# --- Chart ---
+st.subheader(f"📉 Price Chart for {symbol}")
+fig, ax = plt.subplots(figsize=(12, 5))
+ax.plot(data.index, data['Close'], label='Close Price', linewidth=1.5)
 
-# Buy/Sell markers
-ax.plot(data.index[data['Buy']], data['Close'][data['Buy']], '^', markersize=10, color='green', label='Buy')
-ax.plot(data.index[data['Sell']], data['Close'][data['Sell']], 'v', markersize=10, color='red', label='Sell')
+# Add Buy signals
+ax.plot(data.index[data['Buy']], data['Close'][data['Buy']], '^', markersize=10, color='green', label='Buy Signal')
 
-ax.set_title(f"{symbol} Price with Buy/Sell Signals")
-ax.set_xlabel("Date")
-ax.set_ylabel("Price")
+# Add Sell signals
+ax.plot(data.index[data['Sell']], data['Close'][data['Sell']], 'v', markersize=10, color='red', label='Sell Signal')
+
+ax.set_title(f"{symbol} Price & Signals")
 ax.legend()
-ax.grid()
+ax.grid(True)
 st.pyplot(fig)
 
-# Show data
-with st.expander("📋 Show raw data"):
-    st.dataframe(data.tail(100))
+# --- Show indicators ---
+with st.expander("📊 Technical Indicators"):
+    st.dataframe(data[['RSI', 'MACD', 'MACD_signal', 'ADX', 'Volume', 'Volume_avg']].tail(20))
 
-# Optional download
-csv = data.to_csv().encode('utf-8')
-st.download_button("📥 Download Data", data=csv, file_name=f'{symbol}_data.csv')
+# --- Show recommendations ---
+last_row = data.iloc[-1]
+st.markdown("## 💡 Signal Summary")
+if last_row['Buy']:
+    st.success("✅ Recommendation: **BUY** signal detected.")
+elif last_row['Sell']:
+    st.error("🚫 Recommendation: **SELL** signal detected.")
+else:
+    st.info("⏸️ Recommendation: No strong signal detected at this time.")
