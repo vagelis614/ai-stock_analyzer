@@ -23,10 +23,10 @@ if data.empty or bool(data['Close'].isnull().all()):
 
 data = data.dropna(subset=['Close'])
 
-# --- Extract Series for Indicators ---
-close_prices = data['Close'].squeeze()
-high_prices = data['High'].squeeze()
-low_prices = data['Low'].squeeze()
+# --- Μετατροπή σε 1D Series (αποφυγή σφάλματος "must be 1-dimensional") ---
+close_prices = pd.Series(data['Close'].values.flatten(), index=data.index)
+high_prices = pd.Series(data['High'].values.flatten(), index=data.index)
+low_prices = pd.Series(data['Low'].values.flatten(), index=data.index)
 
 # --- Indicators ---
 data['RSI'] = ta.momentum.RSIIndicator(close=close_prices).rsi()
