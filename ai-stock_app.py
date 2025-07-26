@@ -144,7 +144,7 @@ else:
 # --- Chart ---
 st.subheader("Price Chart & Volume")
 fig, ax = plt.subplots(figsize=(10, 4))
-ax.plot(data['Close'], label='Close Price')
+ax.plot(data['Close'], label='Close Price', color='blue', alpha=0.6)
 ax.set_ylabel("Price")
 ax2 = ax.twinx()
 ax2.bar(data.index, data['Volume'], alpha=0.2, label="Volume", color='gray')
