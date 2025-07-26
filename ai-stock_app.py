@@ -2,81 +2,61 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import ta
+import matplotlib.pyplot as plt
 
-# --- App title ---
-st.title("📈 AI Penny Stock Analyzer")
+st.set_page_config(page_title="AI Stock Analyzer", layout="wide")
 
-# --- Input ---
-symbol = st.text_input("Enter stock ticker (e.g., SNDL, NAKD, CEI)", value="CEI")
+st.title("📈 AI Stock Analyzer")
+symbol = st.text_input("📊 Enter Stock Ticker", "AAPL").upper()
 
-# --- Load Data ---
-@st.cache_data
-def load_data(symbol):
-    data = yf.download(symbol, period="6mo", interval="1d")
-    return data
+if not symbol:
+    st.warning("Please enter a stock symbol.")
+    st.stop()
 
-data = load_data(symbol)
-
-# --- Handle missing or empty data ---
-if data.empty or data.isnull().values.any():
+# Download stock data
+data = yf.download(symbol, period="6mo", interval="1d")
+if data.empty or data['Close'].isnull().all():
     st.error("No valid data found for the given symbol.")
     st.stop()
 
-data.dropna(inplace=True)
+# Ensure close is 1D Series
+close_series = data['Close']
+if isinstance(close_series, pd.DataFrame):
+    close_series = close_series.squeeze()
 
-# --- Convert OHLC columns to 1D Series for TA-lib compatibility ---
-close_prices = pd.Series(data['Close'].values.flatten(), index=data.index)
-high_prices = pd.Series(data['High'].values.flatten(), index=data.index)
-low_prices = pd.Series(data['Low'].values.flatten(), index=data.index)
-
-# --- Indicators ---
-data['RSI'] = ta.momentum.RSIIndicator(close=close_prices).rsi()
-
-macd = ta.trend.MACD(close=close_prices)
+# Calculate indicators
+data['RSI'] = ta.momentum.RSIIndicator(close_series).rsi()
+macd = ta.trend.MACD(close_series)
 data['MACD'] = macd.macd()
 data['MACD_signal'] = macd.macd_signal()
-data['MACD_hist'] = macd.macd_diff()
+data['ADX'] = ta.trend.ADXIndicator(data['High'], data['Low'], close_series).adx()
+data['Volume_SMA'] = data['Volume'].rolling(window=14).mean()
 
-adx = ta.trend.ADXIndicator(high=high_prices, low=low_prices, close=close_prices)
-data['ADX'] = adx.adx()
+# Buy/Sell Signals (simple logic)
+data['Buy'] = (data['RSI'] < 30) & (data['MACD'] > data['MACD_signal']) & (data['ADX'] > 20)
+data['Sell'] = (data['RSI'] > 70) & (data['MACD'] < data['MACD_signal']) & (data['ADX'] > 20)
 
-# --- Plot Price and Volume ---
-st.subheader("📊 Price & Volume")
-fig, ax1 = plt.subplots(figsize=(12, 5))
-ax1.plot(data.index, data['Close'], label="Close Price", linewidth=2)
-ax1.set_ylabel("Price")
-ax2 = ax1.twinx()
-ax2.bar(data.index, data['Volume'], alpha=0.2, label="Volume", color='gray')
-ax2.set_ylabel("Volume")
-fig.legend(loc="upper left")
-st.pyplot(fig)
+# Plotting
+st.subheader(f"📉 Price & Indicators for {symbol}")
+fig, ax = plt.subplots(figsize=(12, 6))
+ax.plot(data.index, data['Close'], label='Close Price')
 
-# --- Plot RSI ---
-st.subheader("💡 RSI")
-fig, ax = plt.subplots(figsize=(12, 3))
-ax.plot(data.index, data['RSI'], label="RSI", color='purple')
-ax.axhline(70, linestyle='--', color='red')
-ax.axhline(30, linestyle='--', color='green')
-ax.set_ylim([0, 100])
-ax.set_ylabel("RSI")
-st.pyplot(fig)
+# Buy/Sell markers
+ax.plot(data.index[data['Buy']], data['Close'][data['Buy']], '^', markersize=10, color='green', label='Buy')
+ax.plot(data.index[data['Sell']], data['Close'][data['Sell']], 'v', markersize=10, color='red', label='Sell')
 
-# --- Plot MACD ---
-st.subheader("📉 MACD")
-fig, ax = plt.subplots(figsize=(12, 3))
-ax.plot(data.index, data['MACD'], label="MACD", color='blue')
-ax.plot(data.index, data['MACD_signal'], label="Signal", color='orange')
-ax.bar(data.index, data['MACD_hist'], label="Histogram", alpha=0.3)
-ax.set_ylabel("MACD")
+ax.set_title(f"{symbol} Price with Buy/Sell Signals")
+ax.set_xlabel("Date")
+ax.set_ylabel("Price")
 ax.legend()
+ax.grid()
 st.pyplot(fig)
 
-# --- Plot ADX ---
-st.subheader("📌 ADX")
-fig, ax = plt.subplots(figsize=(12, 3))
-ax.plot(data.index, data['ADX'], label="ADX", color='black')
-ax.axhline(25, linestyle='--', color='gray')
-ax.set_ylabel("ADX Strength")
-st.pyplot(fig)
+# Show data
+with st.expander("📋 Show raw data"):
+    st.dataframe(data.tail(100))
+
+# Optional download
+csv = data.to_csv().encode('utf-8')
+st.download_button("📥 Download Data", data=csv, file_name=f'{symbol}_data.csv')
