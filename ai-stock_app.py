@@ -16,21 +16,24 @@ if not symbol:
 
 # Download stock data
 data = yf.download(symbol, period="6mo", interval="1d")
+
 if data.empty or data['Close'].isnull().all():
     st.error("No valid data found for the given symbol.")
     st.stop()
 
-# Ensure close is 1D Series
-close_series = data['Close']
-if isinstance(close_series, pd.DataFrame):
-    close_series = close_series.squeeze()
+# Make sure Close is a Series (1D)
+close = data['Close']
+if isinstance(close, pd.DataFrame):
+    close = close.squeeze()  # turns (n,1) -> (n,)
+elif isinstance(close.values[0], (np.ndarray, list)):
+    close = close.apply(lambda x: x[0])
 
 # Calculate indicators
-data['RSI'] = ta.momentum.RSIIndicator(close_series).rsi()
-macd = ta.trend.MACD(close_series)
+data['RSI'] = ta.momentum.RSIIndicator(close).rsi()
+macd = ta.trend.MACD(close)
 data['MACD'] = macd.macd()
 data['MACD_signal'] = macd.macd_signal()
-data['ADX'] = ta.trend.ADXIndicator(data['High'], data['Low'], close_series).adx()
+data['ADX'] = ta.trend.ADXIndicator(data['High'], data['Low'], close).adx()
 data['Volume_SMA'] = data['Volume'].rolling(window=14).mean()
 
 # Buy/Sell Signals (simple logic)
