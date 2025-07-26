@@ -21,15 +21,22 @@ if data.empty or bool(data['Close'].isnull().all()):
     st.error("⚠️ No price data available for this symbol. Try a different one.")
     st.stop()
 
-data = data.dropna(subset=['Close'])  # Καθαρισμός NaN τιμών
+data = data.dropna(subset=['Close'])
+
+# --- Extract Series for Indicators ---
+close_prices = data['Close'].squeeze()
+high_prices = data['High'].squeeze()
+low_prices = data['Low'].squeeze()
 
 # --- Indicators ---
-data['RSI'] = ta.momentum.RSIIndicator(data['Close']).rsi()
-macd = ta.trend.MACD(data['Close'])
+data['RSI'] = ta.momentum.RSIIndicator(close=close_prices).rsi()
+
+macd = ta.trend.MACD(close=close_prices)
 data['MACD'] = macd.macd()
 data['MACD_signal'] = macd.macd_signal()
 data['MACD_hist'] = macd.macd_diff()
-adx = ta.trend.ADXIndicator(data['High'], data['Low'], data['Close'])
+
+adx = ta.trend.ADXIndicator(high=high_prices, low=low_prices, close=close_prices)
 data['ADX'] = adx.adx()
 
 # --- Target: Will price go UP in 3 days? ---
@@ -38,7 +45,7 @@ data['Target'] = (data['Future_Close'] > data['Close']).astype(int)
 
 # --- Features & Model ---
 features = ['RSI', 'MACD', 'MACD_signal', 'MACD_hist', 'ADX', 'Volume']
-df = data.dropna()  # αφαιρεί σειρές με NaN
+df = data.dropna()  # Καθαρίζουμε σειρές με NaN από τους δείκτες
 
 if len(df) < 50:
     st.error("⚠️ Not enough data after indicators. Try different stock or timeframe.")
