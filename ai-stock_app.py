@@ -85,7 +85,7 @@ ax.set_ylabel("Price")
 ax2 = ax.twinx()
 ax2.bar(data.index, data['Volume'], alpha=0.2, label="Volume", color='gray')
 ax.legend(loc="upper left")
-st.pyplot(fig)0:.2f}%")
+st.pyplot(fig)
 
 # --- Predict latest day ---
 latest_data = df[features].iloc[-1:]
